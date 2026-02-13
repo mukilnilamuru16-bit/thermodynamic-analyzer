@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Advanced Thermodynamic Cycle Analyzer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: white;
+    }
+
+    .app {
+      max-width: 900px;
+      margin: auto;
+      padding: 30px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.08);
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+
+    select, input {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: none;
+    }
+
+    button {
+      padding: 10px;
+      width: 100%;
+      background: #00c6ff;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .results { min-height: 100px; }
+
+    .green { color: #00ff9d; }
+    .yellow { color: #ffd000; }
+    .red { color: #ff4d4d; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <h1>Advanced Thermodynamic Cycle Analyzer</h1>
+
+  <div class="card">
+    <label>Select System:</label>
+    <select id="systemSelect">
+      <option value="otto">Otto Cycle</option>
+      <option value="rankine">Rankine Cycle</option>
+      <option value="heatExchanger">Counter Flow Heat Exchanger</option>
+      <option value="refrigeration">Vapor Compression Refrigeration</option>
+      <option value="conduction">Composite Wall Conduction</option>
+    </select>
+
+    <div id="inputs"></div>
+
+    <button onclick="calculate()">Run Analysis</button>
+  </div>
+
+  <div id="results" class="card results"></div>
+</div>
+
+<script>
+const inputsDiv = document.getElementById("inputs");
+const resultsDiv = document.getElementById("results");
+
+document.getElementById("systemSelect").addEventListener("change", generateInputs);
+
+function generateInputs() {
+  const system = document.getElementById("systemSelect").value;
+  let html = "";
+
+  if(system === "otto"){
+    html = `
+      <input id="r" placeholder="Compression Ratio (r)">
+      <input id="gamma" placeholder="Gamma (1.4 typical)">
+      <input id="T1" placeholder="Initial Temp (K)">
+    `;
+  }
+
+  if(system === "rankine"){
+    html = `
+      <input id="wt" placeholder="Turbine Work (kJ/kg)">
+      <input id="wp" placeholder="Pump Work (kJ/kg)">
+      <input id="qin" placeholder="Heat Input (kJ/kg)">
+    `;
+  }
+
+  if(system === "heatExchanger"){
+    html = `
+      <input id="Th_in" placeholder="Hot Inlet Temp (°C)">
+      <input id="Th_out" placeholder="Hot Outlet Temp (°C)">
+      <input id="Tc_in" placeholder="Cold Inlet Temp (°C)">
+      <input id="Tc_out" placeholder="Cold Outlet Temp (°C)">
+    `;
+  }
+
+  if(system === "refrigeration"){
+    html = `
+      <input id="ql" placeholder="Cooling Effect (kJ/kg)">
+      <input id="w" placeholder="Compressor Work (kJ/kg)">
+    `;
+  }
+
+  if(system === "conduction"){
+    html = `
+      <input id="k1" placeholder="k1 (W/mK)">
+      <input id="L1" placeholder="L1 (m)">
+      <input id="k2" placeholder="k2 (W/mK)">
+      <input id="L2 (m)">
+      <input id="A" placeholder="Area (m²)">
+      <input id="T_hot" placeholder="Hot Temp (°C)">
+      <input id="T_cold" placeholder="Cold Temp (°C)">
+    `;
+  }
+
+  inputsDiv.innerHTML = html;
+}
+
+generateInputs();
+
+function calculate(){
+  const system = document.getElementById("systemSelect").value;
+  resultsDiv.innerHTML = "";
+
+  try {
+
+    if(system === "otto"){
+      const r = getVal("r");
+      const gamma = getVal("gamma");
+      const T1 = getVal("T1");
+
+      if(r <= 1) throw "Compression ratio must be > 1";
+
+      const efficiency = 1 - (1 / Math.pow(r, gamma - 1));
+      const T2 = T1 * Math.pow(r, gamma - 1);
+      const mep = efficiency * 1000;
+
+      showResult(`
+        <h3>Otto Cycle Results</h3>
+        Efficiency: ${(efficiency*100).toFixed(2)}%<br>
+        T2: ${T2.toFixed(2)} K<br>
+        Mean Effective Pressure: ${mep.toFixed(2)} kPa
+      `, efficiency);
+    }
+
+    if(system === "rankine"){
+      const wt = getVal("wt");
+      const wp = getVal("wp");
+      const qin = getVal("qin");
+
+      const net = wt - wp;
+      const efficiency = net/qin;
+
+      showResult(`
+        <h3>Rankine Cycle Results</h3>
+        Net Work: ${net.toFixed(2)} kJ/kg<br>
+        Thermal Efficiency: ${(efficiency*100).toFixed(2)}%
+      `, efficiency);
+    }
+
+    if(system === "heatExchanger"){
+      const Th_in = getVal("Th_in");
+      const Th_out = getVal("Th_out");
+      const Tc_in = getVal("Tc_in");
+      const Tc_out = getVal("Tc_out");
+
+      const delta1 = Th_in - Tc_out;
+      const delta2 = Th_out - Tc_in;
+      const LMTD = (delta1 - delta2) / Math.log(delta1/delta2);
+
+      showResult(`
+        <h3>Heat Exchanger Results</h3>
+        LMTD: ${LMTD.toFixed(2)} °C
+      `, 0.7);
+    }
+
+    if(system === "refrigeration"){
+      const ql = getVal("ql");
+      const w = getVal("w");
+      const cop = ql/w;
+
+      showResult(`
+        <h3>Refrigeration Results</h3>
+        COP: ${cop.toFixed(2)}
+      `, cop/5);
+    }
+
+    if(system === "conduction"){
+      const k1 = getVal("k1");
+      const L1 = getVal("L1");
+      const k2 = getVal("k2");
+      const L2 = getVal("L2");
+      const A = getVal("A");
+      const T_hot = getVal("T_hot");
+      const T_cold = getVal("T_cold");
+
+      const R1 = L1/(k1*A);
+      const R2 = L2/(k2*A);
+      const R_total = R1 + R2;
+      const Q = (T_hot - T_cold)/R_total;
+
+      showResult(`
+        <h3>Composite Wall Results</h3>
+        Total Resistance: ${R_total.toFixed(4)} K/W<br>
+        Heat Transfer Rate: ${Q.toFixed(2)} W
+      `, 0.6);
+    }
+
+  } catch(e){
+    resultsDiv.innerHTML = `<div class="error">${e}</div>`;
+  }
+}
+
+function getVal(id){
+  const val = document.getElementById(id).value;
+  if(val === "") throw "Please fill all fields";
+  return parseFloat(val);
+}
+
+function showResult(html, efficiency){
+  let colorClass = "red";
+  if(efficiency > 0.6) colorClass = "green";
+  else if(efficiency > 0.3) colorClass = "yellow";
+
+  resultsDiv.innerHTML = `<div class="${colorClass}">${html}</div>`;
+}
+</script>
+
+</body>
+</html>
